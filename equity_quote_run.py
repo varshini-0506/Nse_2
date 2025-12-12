@@ -298,7 +298,7 @@ async def scrape_equity_quote(
             # Prime cookies by visiting NSE homepage first (helps avoid HTTP/2 errors)
             print("[INFO] Priming cookies via NSE homepage...")
             try:
-                await page.goto("https://www.nseindia.com", wait_until="domcontentloaded", timeout=15000)
+                await page.goto("https://www.nseindia.com", wait_until="domcontentloaded", timeout=60000)
                 await human_delay(1, 2)
             except Exception as e:
                 print(f"[WARN] Homepage priming failed (continuing anyway): {e}")

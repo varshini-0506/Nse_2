@@ -248,7 +248,7 @@ async def scrape_with_search(url: str, search_term: str, output_dir: str = "outp
         try:
             print(f"[INFO] Priming cookies via NSE homepage...")
             try:
-                await page.goto("https://www.nseindia.com", wait_until="domcontentloaded", timeout=30000)
+                await page.goto("https://www.nseindia.com", wait_until="domcontentloaded", timeout=60000)
                 await human_delay(2, 4)
             except Exception as e:
                 print(f"[WARN] Failed priming on homepage: {e}")

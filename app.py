@@ -15,7 +15,13 @@ from equity_quote_run import scrape_equity_quote
 from finiancialReport import scrape_with_search
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+# Enable CORS for all origins (*) and explicitly allow http://localhost:5173
+def cors_origin_check(origin):
+    """Allow all origins including http://localhost:5173"""
+    # Explicitly allow localhost:5173 and all other origins (*)
+    return True  # This allows all origins, including http://localhost:5173
+
+CORS(app, origins=cors_origin_check)
 
 # Default output directory
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
