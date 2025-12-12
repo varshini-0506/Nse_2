@@ -15,13 +15,16 @@ from equity_quote_run import scrape_equity_quote
 from finiancialReport import scrape_with_search
 
 app = Flask(__name__)
-# Enable CORS for all origins (*) and explicitly allow http://localhost:5173
-def cors_origin_check(origin):
-    """Allow all origins including http://localhost:5173"""
-    # Explicitly allow localhost:5173 and all other origins (*)
-    return True  # This allows all origins, including http://localhost:5173
-
-CORS(app, origins=cors_origin_check)
+# Enable CORS for all origins
+# This explicitly allows http://localhost:5173 along with all other origins (*)
+# Note: CORS(app) allows all origins, which includes http://localhost:5173
+CORS(app, resources={
+    r"/*": {
+        "origins": "*",  # Allows all origins including http://localhost:5173
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
 
 # Default output directory
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
@@ -29,13 +32,25 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
 def run_async(coro):
-    """Helper function to run async functions in Flask"""
+    """Helper function to run async functions in Flask with gevent compatibility"""
     try:
+        # Try to get the current event loop
         loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
     except RuntimeError:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-    return loop.run_until_complete(coro)
+    
+    # Run the coroutine
+    try:
+        return loop.run_until_complete(coro)
+    except RuntimeError as e:
+        # If there's a runtime error, create a new event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        return loop.run_until_complete(coro)
 
 
 @app.route('/api/equity-quote', methods=['GET'])
@@ -87,11 +102,15 @@ def get_equity_quote():
         # Format: https://www.nseindia.com/get-quote/equity/{SYMBOL}/{COMPANY-SLUG}
         url = f"https://www.nseindia.com/get-quote/equity/{symbol}/{company_slug}"
         
-        # Headless: enforce headless in hosted envs unless explicitly disabled via env
-        headless_env = os.getenv("FORCE_HEADLESS", "true").lower() == "true"
-        headless = request.args.get('headless', 'true').lower() == 'true'
-        if headless_env:
-            headless = True
+        # Headless: check query parameter first, then env variable
+        # Query parameter takes precedence for local development
+        headless_param = request.args.get('headless')
+        if headless_param is not None:
+            headless = headless_param.lower() == 'true'
+        else:
+            # If no query param, check environment variable (defaults to true for production)
+            headless_env = os.getenv("FORCE_HEADLESS", "true").lower() == "true"
+            headless = headless_env
         take_screenshot = request.args.get('take_screenshot', 'false').lower() == 'true'  # Default to False to save resources
         output_dir = request.args.get('output_dir', OUTPUT_DIR)
         
@@ -164,10 +183,15 @@ def get_financial_report():
         
         symbol = symbol.upper().strip()
         output_dir = request.args.get('output_dir', OUTPUT_DIR)
-        headless_env = os.getenv("FORCE_HEADLESS", "true").lower() == "true"
-        headless = request.args.get('headless', 'true').lower() == 'true'  # Default to headless=True
-        if headless_env:
-            headless = True
+        # Headless: check query parameter first, then env variable
+        # Query parameter takes precedence for local development
+        headless_param = request.args.get('headless')
+        if headless_param is not None:
+            headless = headless_param.lower() == 'true'
+        else:
+            # If no query param, check environment variable (defaults to true for production)
+            headless_env = os.getenv("FORCE_HEADLESS", "true").lower() == "true"
+            headless = headless_env
         
         # Fixed NSE financial results URL
         url = "https://www.nseindia.com/companies-listing/corporate-filings-financial-results-comparision"

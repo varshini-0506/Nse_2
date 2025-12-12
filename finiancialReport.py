@@ -202,12 +202,20 @@ async def scrape_with_search(url: str, search_term: str, output_dir: str = "outp
     json_path = os.path.join(output_dir, f"{domain}_data_{timestamp}.json")
     
     async with async_playwright() as p:
-        # Launch browser - disable blink features to appear more human
+        # Launch browser with optimized args for better performance and stability
         browser = await p.chromium.launch(
             headless=headless,
             args=[
+                '--no-sandbox',
+                '--disable-dev-shm-usage', 
+                '--disable-gpu',
+                '--disable-extensions',
+                '--disable-background-timer-throttling',
+                '--disable-backgrounding-occluded-windows',
+                '--disable-renderer-backgrounding',
+                '--window-size=1920,1080',
                 '--disable-blink-features=AutomationControlled',
-                '--disable-http2',  # force HTTP/1.1 to avoid HTTP2 protocol errors
+                '--disable-http2'
             ]
         )
         
@@ -215,6 +223,8 @@ async def scrape_with_search(url: str, search_term: str, output_dir: str = "outp
             viewport={'width': 1920, 'height': 1080},
             user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             ignore_https_errors=True,
+            java_script_enabled=True,
+            reduced_motion='no-preference'
         )
         
         page = await context.new_page()
@@ -258,12 +268,12 @@ async def scrape_with_search(url: str, search_term: str, output_dir: str = "outp
             goto_success = False
             for attempt in range(3):
                 try:
-                    await page.goto(
-                        url,
-                        wait_until="domcontentloaded",  # less strict than networkidle
-                        timeout=300000,  # allow up to 5 minutes before timing out
-                        referer="https://www.google.com/",
-                    )
+                    await page.goto(url, wait_until="networkidle", timeout=90000)  # 90s max
+                    # Wait for main content selectors
+                    await page.wait_for_selector('main#midBody, div#resultsCompare', timeout=30000)
+                    # Trigger lazy load by scrolling
+                    await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                    await page.wait_for_timeout(5000)  # Stabilize
                     goto_success = True
                     break
                 except Exception as e:

@@ -251,8 +251,16 @@ async def scrape_equity_quote(
         browser = await p.chromium.launch(
             headless=headless,
             args=[
-                "--disable-blink-features=AutomationControlled",
-                "--disable-http2",  # Disable HTTP/2 to avoid protocol errors
+                '--no-sandbox',
+                '--disable-dev-shm-usage', 
+                '--disable-gpu',
+                '--disable-extensions',
+                '--disable-background-timer-throttling',
+                '--disable-backgrounding-occluded-windows',
+                '--disable-renderer-backgrounding',
+                '--window-size=1920,1080',
+                '--disable-blink-features=AutomationControlled',
+                '--disable-http2'
             ],
         )
 
@@ -263,7 +271,9 @@ async def scrape_equity_quote(
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
-            ignore_https_errors=True,  # Ignore SSL certificate errors
+            ignore_https_errors=True,
+            java_script_enabled=True,
+            reduced_motion='no-preference'
         )
 
         page = await context.new_page()
@@ -311,14 +321,19 @@ async def scrape_equity_quote(
                 try:
                     response = await page.goto(
                         url,
-                        wait_until="domcontentloaded",
-                        timeout=300000,  # allow up to 5 minutes before timing out
+                        wait_until="networkidle",
+                        timeout=90000,  # 90s max
                         referer="https://www.nseindia.com"
                     )
                     # Get the final URL after any redirects
                     final_url = page.url
                     if final_url != url:
                         print(f"[INFO] Redirected to: {final_url}")
+                    # Wait for main content selectors
+                    await page.wait_for_selector('main#midBody, div#resultsCompare', timeout=30000)
+                    # Trigger lazy load by scrolling
+                    await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                    await page.wait_for_timeout(5000)  # Stabilize
                     break
                 except Exception as e:
                     if attempt < max_retries - 1:
